@@ -5,7 +5,6 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'Device::XBee::API',
     VERSION_FROM      => 'lib/Device/XBee/API.pm', # finds $VERSION
-    PREREQ_PM         => { 'Device::SerialPort' => 1.04 }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Device/XBee/API.pm', # retrieve abstract from module
        AUTHOR         => 'jeagle@cpan.org') : ()),
