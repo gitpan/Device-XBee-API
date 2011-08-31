@@ -208,7 +208,10 @@ METHODS
     Returned packets will be as a hashref of the packet data, broken out by
     key for easy access. Note, as this module is a work in progress, not
     every XBee packet type is supported. Callers should check the "api_type"
-    key to determine the type of the received packet.
+    key to determine the type of the received packet. When possible, packed
+    integers will be unpacked into the "data_as_int" key. If no packed
+    integer is found this key will not be present. If unpacking is not
+    possible (due to an unknown packet type, etc), the value will be undef.
 
     Accepts a single parameter, a flag indicating the received frame ID
     should NOT be freed automatically. See rx_frame_id for why you might
@@ -247,6 +250,12 @@ METHODS
     clock.
 
 CHANGES
+  0.4, 20110831 - jeagle
+    Fix packet timeout bug reported by Dave S.
+
+    Replace call to die() in __data_to_int with return undef, update docs to
+    reflect this.
+
   0.3, 20110621 - jeagle, jdodgen
     Change from internal Device::SerialPort wrapper to accepting an fh.
 
