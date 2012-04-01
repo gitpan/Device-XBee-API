@@ -250,6 +250,14 @@ METHODS
     clock.
 
 CHANGES
+  0.5, 20120401 - jeagle
+    Add support for Win32::SerialPort to enable Windows support. (Thanks
+    Jerry)
+
+    Fix issue with tx() in async mode. (Thanks Vicente)
+
+    Add support for "explicit rx indicator" packets. (Thanks Vicente)
+
   0.4, 20110831 - jeagle
     Fix packet timeout bug reported by Dave S.
 
