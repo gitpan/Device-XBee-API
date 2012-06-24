@@ -8,6 +8,8 @@ EXAMPLE
      use Device::SerialPort;
      use Device::XBee::API;
      use Data::Dumper;
+     $Data::Dumper::Useqq = 1;
+
      my $serial_port_device = Device::SerialPort->new( '/dev/ttyU0' ) || die $!;
      $serial_port_device->baudrate( 9600 );
      $serial_port_device->databits( 8 );
@@ -17,11 +19,11 @@ EXAMPLE
      $serial_port_device->read_const_time( 1000 );    # 1 second per unfulfilled "read" call
 
      my $api = Device::XBee::API->new( { fh => $serial_port_device } ) || die $!;
-     if ( !$api->tx( { sh => 0, sl => 0 }, 'hello world!' ) {
+     if ( !$api->tx( { sh => 0, sl => 0 }, 'hello world!' ) ) {
          die "Transmit failed!";
      }
      my $rx = $api->rx();
-     die Dumper($rx);
+     die Dumper( $rx );
 
 SYNOPSIS
     Device::XBee::API is a module designed to encapsulate the Digi XBee API
@@ -60,11 +62,13 @@ CONSTANTS
      XBEE_API_BROADCAST_NA_UNKNOWN_ADDR
  
      XBEE_API_TYPE_TO_STRING
+     XBEE_API_BAUD_RATE_TABLE
 
     The above should be self explanatory (with the help of the datasheet).
     The constant "XBEE_API_TYPE_TO_STRING" is a hashref keyed by the numeric
     id of the packet type with the value being the constant name, to aid in
-    debugging.
+    debugging. The constant XBEE_API_BAUD_RATE_TABLE is the baud rate table
+    used by the BD API command.
 
 METHODS
   new
@@ -110,6 +114,13 @@ METHODS
     reused. This will help work around any issues with frame ID's "leaking",
     but could cause odd behavior in cases where all outstanding frame IDs
     are still in use. This option should be used with caution.
+
+   api_mode_escape
+    Optional. If set to a true value, the module will automatically escape
+    outgoing data and un-escape incoming data for use with XBee API mode 2.
+    Defaults to false.
+
+    See the XBee datasheet for details on API mode 2 and escaped characters.
 
   at
     Send an AT command to the module. Accepts two parameters, the first is
@@ -220,18 +231,17 @@ METHODS
 
   rx_frame_id
     Like rx but only returns the packet with the requested frame ID number
-    If no packet with the specified frame ID is received within the object's
-    configured packet_timeout time, undef will be returned. Any other
-    packets received will be enqueued for later processing by another rx
-    function.
+    and then frees that frame ID. If no packet with the specified frame ID
+    is received within the object's configured packet_timeout time, undef
+    will be returned. Any other packets received will be enqueued for later
+    processing by another rx function call.
 
     Accepts two parameters, the first being the desired frame ID and the
-    second a flag denoting this frame ID should NOT be automatically freed
-    after it is received. In cases where multiple frames with the same ID
-    are expected to be returned (such as after an AT ND command), it is
-    preferable to set this flag to a true value and continue to call
-    rx_frame_id until undef is returned, and then free the ID via
-    free_frame_id.
+    second a flag denoting that the frame ID should NOT be automatically
+    freed. In cases where multiple frames with the same ID are expected to
+    be returned (such as after an AT ND command), it is preferable to set
+    this flag to a true value and continue to call rx_frame_id until undef
+    is returned, and then free the ID via free_frame_id.
 
   discover_network
     Performs a network node discovery via the ND 'AT' command. Blocks until
@@ -249,7 +259,68 @@ METHODS
     Note, the age-out mechanism may be susceptable to stepping of the system
     clock.
 
+EXAMPLES
+    Miscellaneous code examples follow.
+
+  Fetch modem baud rage
+     use Device::SerialPort;
+     use Device::XBee::API;
+ 
+     # From XBee datasheet pg 73.
+     my @baud_rate_table = (
+         1200,
+         2400,
+         4800,
+         9600,
+         19200,
+         38400,
+         57600,
+         115200
+     );
+ 
+     # Configure the serial port
+     my $serial_port_device = Device::SerialPort->new( '/dev/ttyU0' )
+         || die $!;
+     $serial_port_device->baudrate( 9600 );
+     $serial_port_device->databits( 8 );
+     $serial_port_device->stopbits( 1 );
+     $serial_port_device->parity( 'none' );
+     $serial_port_device->read_char_time( 0 );
+     $serial_port_device->read_const_time( 1000 );
+ 
+     # Create the API object
+     my $api = Device::XBee::API->new( { fh => $serial_port_device } )
+         || die $!;
+ 
+     # Send the BD API command
+     my $at_frame_id = $api->at( 'BD' );
+     die "Transmit failed" unless $at_frame_id;
+ 
+     # Receive the reply
+     my $rx = $api->rx_frame_id( $at_frame_id );
+     die "No reply received" if !$rx;
+     if ( $rx->{status} != 0 ) {
+         die "API error" if $rx->{is_error};
+         die "Invalid command" if $rx->{is_invalid_command};
+         die "Invalid parameter" if $rx->{is_invalid_parameter};
+         die "Unknown error";
+     }
+ 
+     my $baud_rate = $baud_rate_table[ $rx->{data_as_int} ];
+     if ( !$baud_rate ) {
+         $baud_rate = $rx->{data_as_int};
+     }
+ 
+     print "Modem baud rate is $baud_rate bps.\n";
+
 CHANGES
+  0.6, 20120624 - jeagle
+    Update documentation.
+
+    Add support for API mode 2 escapes. Needs testing.
+
+    Add constant for the "BD" baud rate table.
+
   0.5, 20120401 - jeagle
     Add support for Win32::SerialPort to enable Windows support. (Thanks
     Jerry)
