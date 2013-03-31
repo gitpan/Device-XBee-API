@@ -115,6 +115,21 @@ METHODS
     but could cause odd behavior in cases where all outstanding frame IDs
     are still in use. This option should be used with caution.
 
+   alloc_frame_id_func
+=head3 free_frame_id_func
+    Optional code references to functions used to allocate and free frame
+    IDs. If both are specified they will be called in place of the internal
+    frame ID tracking functions allowing the user more control over how
+    frame IDs are generated. The alloc_frame_id_func will be called when a
+    new frame ID is needed and will be passed as a parameter the reference
+    to the Device:XBee::API object and must return an integer between 1 and
+    255 inclusive. The free_frame_id_func will be called when the reply
+    frame is received and the frame ID is no longer needed and will be
+    passed as parameters a reference to the Device::XBee::API obect and the
+    frame ID to be freed.
+
+    See auto_reuse_frame_id for details on how this module uses frame IDs.
+
    api_mode_escape
     Optional. If set to a true value, the module will automatically escape
     outgoing data and un-escape incoming data for use with XBee API mode 2.
@@ -314,6 +329,12 @@ EXAMPLES
      print "Modem baud rate is $baud_rate bps.\n";
 
 CHANGES
+  0.7, 20130330 - jeagle
+    Add ability to allow users to specify their own frame allocation
+    routines.
+
+    Update API mode 2 with latest version from jdodgen
+
   0.6, 20120624 - jeagle
     Update documentation.
 
