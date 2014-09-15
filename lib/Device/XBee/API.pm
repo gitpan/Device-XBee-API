@@ -5,7 +5,7 @@ use strict;
 require Exporter;
 our ( @ISA, @EXPORT_OK, %EXPORT_TAGS );
 
-our $VERSION = 0.7;
+our $VERSION = 0.8;
 
 use IO::Select;
 use constant 1.01;
@@ -39,6 +39,18 @@ use constant XBEE_API_TYPE_TO_STRING => {
     0x92 => 'ZIGBEE_IO_DATA_SAMPLE_RX_INDICATOR',
     0x94 => 'XBEE_SENSOR_READ_INDICATOR_',
     0x95 => 'NODE_IDENTIFICATION_INDICATOR',
+};
+
+use constant XBEE_API_TRANSMIT_STATUS_TO_STRING => {
+    0x00 => 'Success',
+    0x02 => 'CCA Failure',
+    0x15 => 'Invalid destination endpoint',
+    0x21 => 'Network ACK Failure',
+    0x22 => 'Not Joined to Network',
+    0x23 => 'Self-addressed',
+    0x24 => 'Address Not Found',
+    0x25 => 'Route Not Found',
+    0x74 => 'Data payload too large',
 };
 
 use constant XBEE_API_BAUD_RATE_TABLE => [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200];
@@ -324,6 +336,12 @@ sub read_packet {
         }
     }
 
+    # Received either an invalid packet or a packet that has no associated API
+    # data. In either case there's nothing we can do with it.
+    if ( $packet_data_length == 0 ) {
+        return undef;
+    }
+
     $packet_data_length--;
 
     my ( $packet_api_id, $packet_data, $packet_checksum ) = unpack( "Ca[$packet_data_length]C", $d );
@@ -498,8 +516,9 @@ sub send_packet {
 
 Send an AT command to the module. Accepts two parameters, the first is the AT
 command name (as two-character string), and the second is the expected data
-for that command (if any). See the XBee datasheet for a list of supported AT
-commands and expected data for each.
+for that command (if any). Data will be converted to a string before it is
+sent, so integers must first be packed before sending. See the XBee datasheet
+for a list of supported AT commands and expected data for each.
 
 Returns the frame ID sent for this packet. This method does not wait for a
 reply from the XBee, as the expected reply is dependent on the AT command sent.
@@ -507,6 +526,12 @@ To retrieve the reply (if any), call one of the L<rx> methods.
 
 If no reply is expected, the caller should immediately free the returned frame
 ID via L<free_frame_id> to prevent frame ID leaks.
+
+=head3 Example
+
+my $at_frame_id = $api->at( 'AO', pack( 'C', 1 ) );
+
+=back
 
 =cut
 
@@ -523,8 +548,8 @@ sub at {
 Send an AT command to a remote module. Accepts three parameters: a hashref with
 endpoint addresses, command options, frame_id; the AT command name (as
 two-character string); and the third as the expected data for that command (if
-any). See the XBee datasheet for a list of supported AT commands and expected
-data for each.
+any) as a string. See the XBee datasheet for a list of supported AT commands
+and expected data for each.
 
 Endpoint addresses should be specified as a hashref containing the following
 keys:
@@ -543,24 +568,46 @@ The low 32-bits of the destination address.
 
 The destination network address.
 
-=item disable_ack
-
-If included ack is disabled
-
 =item apply_changes
 
-If included changes applied immediate, if missing an AC command must be sent to
-apply changes
+If set, changes are applied immediately. If not set, an AT AC command must be
+sent separately before the changes will take effect.
+
+=back
+
+Note: The following command options are not supported on all XBee devices.
+
+=over 4
+
+=item disable_ack
+
+If set, the remote node will not reply with an ack.
 
 =item extended_xmit_timeout
 
-If included the exteded transmission timeout is used
+If set, the exteded transmission timeout will be used.
 
 =back
 
 Returns the frame ID sent for this packet. To retrieve the reply (if any), call
 one of the L<rx> methods. If no reply is expected, the caller should immediately
 free the returned frame ID via L<free_frame_id> to prevent frame ID leaks.
+
+=head3 Example
+
+The following example disables the blinking association light on the XBee with
+a constant on.
+
+ if (
+     !$api->remote_at(
+         { sh => 1234567, sl => 1234567890, apply_changes => 1 },
+         'D5', "\x1"
+     )
+ ) {
+     die "Transmit failed!";
+ }
+ my $rx = $api->rx();
+ warn Dumper( $rx );
 
 =cut
 
@@ -590,10 +637,10 @@ sub remote_at {
         $tx->{sl} = XBEE_API_BROADCAST_ADDR_L;
     }
     my ( $ack, $chg, $timeout );
-    if ( !defined $tx->{disable_ack} ) {
-        $ack = 0x00;
-    } else {
+    if ( defined $tx->{disable_ack} ) {
         $ack = 0x01;
+    } else {
+        $ack = 0x00;
     }
     if ( defined $tx->{apply_changes} ) {
         $chg = 0x02;
@@ -1208,6 +1255,12 @@ Miscellaneous code examples follow.
 
 
 =head1 CHANGES
+
+=head2 0.8, 20140914 - jeagle
+
+Clean up remote_at function.
+
+Improve error checking for invalid and empty packets.
 
 =head2 0.7, 20130330 - jeagle
 
